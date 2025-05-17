@@ -98,6 +98,6 @@
 ---
 ### 첨부 자료
 
-- 깃허브 링크:
+- 깃허브 링크: https://github.com/EseungQ/CPP-Library-Project
 - 이미지/코드 캡처:
 - 발표 자료 등:
