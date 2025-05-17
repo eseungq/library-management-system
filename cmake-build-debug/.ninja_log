@@ -1,0 +1,7 @@
+# ninja log v6
+70	825	7691801403762201	CMakeFiles/CPP_Project.dir/main.cpp.obj	672c5c0b4ac63dcb
+10090	10392	7691801503787236	CPP_Project.exe	d348a49d9008155d
+3	452	7691805876932119	build.ninja	93ccaf8befa34a58
+94	10088	7691801403822064	CMakeFiles/CPP_Project.dir/sqlite3.c.obj	6bc10cdade7e4551
+55	2761	7691806195372335	CMakeFiles/CPP_Project.dir/main.cpp.obj	672c5c0b4ac63dcb
+2763	3072	7691806222267164	CPP_Project.exe	d348a49d9008155d
