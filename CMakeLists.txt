@@ -5,5 +5,4 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(CPP_Project
         main.cpp
-        sqlite3.c
 )
