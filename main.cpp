@@ -1,159 +1,116 @@
 #include <iostream>
 #include <string>
-#include <windows.h>
-#include "sqlite3.h"
+#include "DBManager.h"
+#include "UserService.h"
+#include "BookService.h"
+#include "LoanService.h"
 using namespace std;
 
-// 사용자 정보 저장 구조체
-struct User {
-    int id;
-    string username;
-    bool is_admin;
-};
-
-User* currentUser = nullptr;   // 로그인한 사용자
-sqlite3* db = nullptr;         // SQLite DB 핸들
-
-// DB 열기
-bool openDatabase() {
-    if (sqlite3_open("library.db", &db) != SQLITE_OK) {
-        cerr << "데이터베이스 열기 실패: " << sqlite3_errmsg(db) << "\n";
-        return false;
-    }
-    return true;
-}
-
-// DB 닫기
-void closeDatabase() {
-    if (db)
-        sqlite3_close(db);
-}
-
-// 회원가입
-bool signup() {
-    string username, password;
-    int is_admin;
-
-    cout << "회원가입 - 아이디 입력: ";
-    cin >> username;
-
-    // 아이디 중복 검사
-    string check_sql = "SELECT COUNT(*) FROM users WHERE username = ?";
-    sqlite3_stmt* check_stmt;
-    sqlite3_prepare_v2(db, check_sql.c_str(), -1, &check_stmt, nullptr);
-    sqlite3_bind_text(check_stmt, 1, username.c_str(), -1, SQLITE_STATIC);
-
-    int rc = sqlite3_step(check_stmt);
-    if (rc == SQLITE_ROW && sqlite3_column_int(check_stmt, 0) > 0) {
-        cout << "이미 존재하는 아이디입니다.\n";
-        sqlite3_finalize(check_stmt);
-        return false;
-    }
-    sqlite3_finalize(check_stmt);
-
-    cout << "비밀번호 입력: ";
-    cin >> password;
-    cout << "관리자로 등록하시겠습니까? (0: 일반, 1: 관리자): ";
-    cin >> is_admin;
-
-    string insert_sql = "INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)";
-    sqlite3_stmt* insert_stmt;
-    sqlite3_prepare_v2(db, insert_sql.c_str(), -1, &insert_stmt, nullptr);
-    sqlite3_bind_text(insert_stmt, 1, username.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(insert_stmt, 2, password.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(insert_stmt, 3, is_admin);
-
-    rc = sqlite3_step(insert_stmt);
-    if (rc != SQLITE_DONE) {
-        cerr << "회원가입 실패: " << sqlite3_errmsg(db) << "\n";
-        sqlite3_finalize(insert_stmt);
-        return false;
-    }
-
-    sqlite3_finalize(insert_stmt);
-    cout << "회원가입 성공! 로그인 해주세요.\n";
-    return true;
-}
-
-// 로그인
-bool login() {
-    string username, password;
-    cout << "아이디 입력: ";
-    cin >> username;
-    cout << "비밀번호 입력: ";
-    cin >> password;
-
-    string sql = "SELECT id, is_admin FROM users WHERE username = ? AND password = ?";
-    sqlite3_stmt* stmt;
-
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        cerr << "쿼리 준비 실패\n";
-        return false;
-    }
-
-    sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, password.c_str(), -1, SQLITE_STATIC);
-
-    int rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW) {
-        int id = sqlite3_column_int(stmt, 0);
-        int is_admin = sqlite3_column_int(stmt, 1);
-        currentUser = new User{id, username, static_cast<bool>(is_admin)};
-        cout << "로그인 성공: " << username << "\n";
-        sqlite3_finalize(stmt);
-        return true;
-    } else {
-        cout << "로그인 실패: 아이디 또는 비밀번호 오류\n";
-        sqlite3_finalize(stmt);
-        return false;
-    }
-}
-
-// 로그아웃
-void logout() {
-    if (currentUser) {
-        cout << "로그아웃: " << currentUser->username << "\n";
-        delete currentUser;
-        currentUser = nullptr;
-    } else {
-        cout << "현재 로그인된 사용자가 없습니다.\n";
-    }
-}
-
-// 메인 실행
 int main() {
-    SetConsoleOutputCP(CP_UTF8);
-    // SQLite 열기
-    if (!openDatabase())
-        return 1;
+    DBManager db("library.db");
+    db.initSchema();                    // 상태값 초기화
+    UserService userSvc(db);
+    BookService bookSvc(db);
+    LoanService loanSvc(db);
+
+    bool isAdmin = false;
+    int userId = -1;
 
     while (true) {
-        if (!currentUser) {
-            cout << "\n--- 메인 메뉴 ---\n";
-            cout << "1. 로그인\n2. 회원가입\n0. 종료\n선택: ";
-            int sel;
-            cin >> sel;
-            // 로그인
-            if (sel == 1)
-                login();
-            // 회원가입
-            else if (sel == 2)
-                signup();
-            // 종료
-            else
+        cout << "[1] Login  [2] Register  [0] Exit > " << endl;
+        string cmd;
+        cin >> cmd;
+        if (cmd == "1") {               // Login
+            string username, password;
+            cout << "Username: ";
+            cin >> username;
+            cout << "Password: ";
+            cin >> password;
+            if (userSvc.login(username, password, userId, isAdmin)) {
+                cout << "Login successful" << endl;
                 break;
+            } else {
+                cout << "Login failed. Please try again." << endl;
             }
-        else {
-            cout << "\n[현재 사용자: " << currentUser->username << " | ";
-            cout << (currentUser->is_admin ? "관리자" : "일반 사용자") << "]\n";
-            cout << "1. 로그아웃\n0. 종료\n선택: ";
-            int sel;
-            cin >> sel;
-            if (sel == 1) logout();
-            else break;
+        } else if (cmd == "2") {        // Register
+            string username, password;
+            char adminChoice = 'n';
+
+            cout << "New username: " ;
+            cin >> username;
+            cout << "New password: ";
+            cin >> password;
+
+            cout << "Register as admin? (Y/N): ";
+            cin >> adminChoice;
+            bool makeAdmin = (adminChoice == 'Y' || adminChoice == 'y');
+
+            if (userSvc.registerUser(username, password, makeAdmin)) {
+                cout << "Registration complete";
+                if (makeAdmin) cout << " (admin)";
+                cout << endl;
+                cout << "Please login." << endl;
+            } else {
+                cout << "Registration failed. Username may already exist." << endl;
+            }
+        } else if (cmd == "0") {        // Exit
+            cout << "Exiting program" << endl;
+            return 0;
+        } else {
+            cout << "Invalid selection." << endl;
         }
     }
-    // SQLite 닫기
-    closeDatabase();
+
+    // Main menu loop
+    while (true) {
+        if (!isAdmin) {                 // Not Admin
+            cout << "[1] List Books  [2] Borrow Book  [3] My Loans  [4] Return Book  [5] Logout > " << endl;
+            string sel;
+            cin >> sel;
+            if (sel == "1") {           // List Books
+                bookSvc.listAllBooks();
+            } else if (sel == "2") {    // Borrow Book
+                int bookId;
+                cout << "Enter book ID to borrow: ";
+                cin >> bookId;
+                bookSvc.borrowBook(bookId, userId);
+            } else if (sel == "3") {    // My Loans
+                loanSvc.listUserLoans(userId);
+            } else if (sel == "4") {    // Return Book
+                int bookId;
+                cout << "Enter book ID to return: ";
+                cin >> bookId;
+                bookSvc.returnBook(bookId, userId);
+            } else if (sel == "5") {    // Logout
+                break;
+            } else {
+                cout << "Invalid selection." << endl;
+            }
+        } else {                        // Admin
+            cout << "[1] Add Book  [2] List Users  [3] All Loans  [4] Logout > " << endl;
+            string sel;
+            cin >> sel;
+            if (sel == "1") {           // Add Book
+                string title, author;
+                cout << "Book title: " ;
+                // clear leftover whitespace using std::ws
+                cin >> ws;
+                getline(cin, title);
+                cout << "Author: " ;
+                getline(cin, author);
+                bookSvc.addBook(title, author);
+            } else if (sel == "2") {    // List Users
+                userSvc.listAllUsers();
+            } else if (sel == "3") {    // All Loans
+                loanSvc.listAllLoans();
+            } else if (sel == "4") {    // Logout
+                break;
+            } else {
+                cout << "Invalid selection." << endl;
+            }
+        }
+    }
+
+    cout << "Program terminated." << endl;
     return 0;
 }
